@@ -10,6 +10,7 @@ from lib.types_ import SeedType
 STARTING_AREA_COLOR = "#ff8000"  # Orange
 UPGRADE_AREAS_COLOR = "#0080ff"  # Blue
 IMPORTANT_STORY_TRIGGER_AREAS_COLOR = "#ff0000"  # Red
+ONETIME_AREAS_COLOR = "#000000"  # Black
 UPGRADE_AREAS = {
     LevelCRC.PLANE_COCKPIT,  # Canteen
     LevelCRC.BITTENBINDERS_CAMP,  # Sling + Rising Strike
@@ -34,18 +35,17 @@ IMPORTANT_STORY_TRIGGER_AREAS = {
 
 def create_vertices(
     transitions_map: Mapping[tuple[int, int], tuple[int, int]],
+    onetime_insertions: dict[int, tuple[Transition, Transition]],
     starting_area: int,
 ):
     output_text = ""
-    area_ids_randomized = set(
-        chain(
-            *(
-                (original[0], redirect[1])
-                for original, redirect
-                in transitions_map.items()
-            ),
-        ),
-    )
+    area_ids_randomized: list[int] = []
+    for original, redirect in transitions_map.items():
+        if original[0] not in area_ids_randomized:
+            area_ids_randomized.append(original[0])
+    for area in onetime_insertions.keys():
+        area_ids_randomized.append(area)
+
     counter_x = 0
     counter_y = 0
     for area_id in area_ids_randomized:
@@ -82,6 +82,12 @@ def create_vertices(
                 + IMPORTANT_STORY_TRIGGER_AREAS_COLOR
                 + '&quot;}}" '
             )
+        elif area_id in onetime_insertions.keys():
+            output_text += (
+                'ownStyles = "{&quot;0&quot;:{&quot;fillStyle&quot;:&quot;'
+                + ONETIME_AREAS_COLOR
+                + '&quot;}}" '
+            )
         output_text += "></node>\n"
         row_length = 10
         counter_x += 1
@@ -91,7 +97,10 @@ def create_vertices(
     return output_text
 
 
-def create_edges(transitions_map: Mapping[tuple[int, int], tuple[int, int]]):
+def create_edges(
+    transitions_map: Mapping[tuple[int, int], tuple[int, int]],
+    onetime_insertions: dict[int, tuple[Transition, Transition]],
+):
     connections = [(original[0], redirect[1]) for original, redirect in transitions_map.items()]
     connections_two_way: list[tuple[int, int]] = []
     connections_one_way: list[tuple[int, int]] = []
@@ -118,11 +127,28 @@ def create_edges(transitions_map: Mapping[tuple[int, int], tuple[int, int]]):
             + f'id="{counter}" ></edge>\n'
         )
         counter += 1
+    for area, insertion in onetime_insertions.items():
+        # TODO (Koala): at some point decide if this is one-way or not!
+        output_text += (
+            f'<edge source="{insertion[0].from_}" '
+            + f'target="{area}" isDirect="false" '
+            + f'id="{counter}" '
+            + 'ownStyles = "{&quot;0&quot;:{&quot;lineDash&quot;:&quot;1&quot;}}" ></edge>\n'
+        )
+        counter += 1
+        output_text += (
+            f'<edge source="{area}" '
+            + f'target="{insertion[1].to}" isDirect="false" '
+            + f'id="{counter}" '
+            + 'ownStyles = "{&quot;0&quot;:{&quot;lineDash&quot;:&quot;1&quot;}}" ></edge>\n'
+        )
+        counter += 1
     return output_text
 
 
 def create_graphml(
     transitions_map: Mapping[tuple[int, int], tuple[int, int]],
+    onetime_insertions: dict[int, tuple[Transition, Transition]],
     seed_string: SeedType,
     starting_area: int,
 ):
@@ -130,8 +156,8 @@ def create_graphml(
 <?xml version="1.0" encoding="UTF-8"?>
 <graphml>
   <graph id="Graph" uidGraph="1" uidEdge="1">
-    {create_vertices(transitions_map, starting_area)}
-    {create_edges(transitions_map)}
+    {create_vertices(transitions_map, onetime_insertions, starting_area)}
+    {create_edges(transitions_map, onetime_insertions)}
   </graph>
 </graphml>"""
 

@@ -47,6 +47,7 @@ def draw_text(text: str):
 def dump_spoiler_logs(
     starting_area_name: str,
     transitions_map: Mapping[tuple[int, int], tuple[int, int]],
+    onetime_insertions: dict[int, tuple[Transition, Transition]],
     seed_string: SeedType,
 ):
     spoiler_logs = f"Starting area: {starting_area_name}\n"
@@ -61,7 +62,22 @@ def dump_spoiler_logs(
     for string in red_string_list:
         spoiler_logs += string
 
+    spoiler_logs += "\nThese onetime levels are inserted like this:\n"
+    onetime_string_list = [
+        f"{TRANSITION_INFOS_DICT[area].name} "
+        + f"will be inserted inbetween: {TRANSITION_INFOS_DICT[redirect[0].from_].name} "
+        + f"to {TRANSITION_INFOS_DICT[redirect[1].to].name}\n"
+        for area, redirect in onetime_insertions.items()
+    ]
+    for string in onetime_string_list:
+        spoiler_logs += string
+
     unrandomized_transitions = ALL_POSSIBLE_TRANSITIONS - transitions_map.keys()
+    unrandomized_transitions = [
+        i for i in unrandomized_transitions
+        if i[0] not in onetime_insertions.keys()
+        and i[1] not in onetime_insertions.keys()
+    ]
     if len(unrandomized_transitions) > 0:
         spoiler_logs += "\nUnrandomized transitions:\n"
         non_random_string_list = [

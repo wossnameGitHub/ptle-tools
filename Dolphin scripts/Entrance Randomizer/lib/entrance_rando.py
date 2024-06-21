@@ -34,12 +34,6 @@ _possible_starting_areas = [
         LevelCRC.ST_CLAIRE_NIGHT,  # gives all items + access to El Dorado
         LevelCRC.JAGUAR,  # sends to final bosses
         LevelCRC.PUSCA,  # sends to final bosses
-        # Temples and spirits are effectively duplicates, so we remove half of them here.
-        # Spawning directly in a temple forces you to do the fight. By convenience let's spawn
-        # directly in the fight (it's also funnier to start the rando as the animal spirit).
-        LevelCRC.MONKEY_TEMPLE,
-        LevelCRC.SCORPION_TEMPLE,
-        LevelCRC.PENGUIN_TEMPLE,
         # Spawning in a Native Minigame is equivalent to spawning in Native Village
         # as they are currently not randomized.
         LevelCRC.WHACK_A_TUCO,
@@ -47,11 +41,8 @@ _possible_starting_areas = [
         LevelCRC.RAFT_BOWLING,
         LevelCRC.PICKAXE_RACE,
         LevelCRC.KABOOM,
-        # See `disabled_exits` below. This is equivalent to spawning in Twin Outposts
+        # See `disabled_exits` below. This is currently equivalent to spawning in Twin Outposts
         LevelCRC.TWIN_OUTPOSTS_UNDERWATER,
-        # Cutscenes
-        LevelCRC.PLANE_CUTSCENE,
-        LevelCRC.VIRACOCHA_MONOLITHS_CUTSCENE,
     }
 ]
 
@@ -70,6 +61,12 @@ transitions_map: dict[tuple[int, int], Transition] = {}
 __connections_left: dict[int, int] = {}
 """Used in randomization process to track per Area how many exits aren't connected yet."""
 
+onetime_visited: dict[int, bool] = {}
+"""Keeping track during runtime if the player visited certain onetime levels."""
+
+onetime_insertions: dict[int, tuple[Transition, Transition]] = {}
+"""Dict of the onetime levels and what Redirection they are inserted inbetween."""
+
 one_way_exits = (
     # the White Valley geyser
     Transition(LevelCRC.WHITE_VALLEY, LevelCRC.MOUNTAIN_SLED_RUN),
@@ -81,11 +78,19 @@ one_way_exits = (
     Transition(LevelCRC.CAVERN_LAKE, LevelCRC.JUNGLE_CANYON),
 )
 
+spirit_fights = (
+    LevelCRC.MONKEY_SPIRIT,
+    LevelCRC.SCORPION_SPIRIT,
+    LevelCRC.PENGUIN_SPIRIT,
+)
+
+onetime_areas = (
+    *spirit_fights,
+    LevelCRC.PLANE_CUTSCENE,
+    LevelCRC.VIRACOCHA_MONOLITHS_CUTSCENE,
+)
+
 disabled_exits = (
-    # Scorpion Temple softlocks you once you enter it without Torch/Pickaxes,
-    # So for now just don't randomize it. That way runs don't just end out of nowhere
-    (LevelCRC.EYES_OF_DOOM, LevelCRC.SCORPION_TEMPLE),
-    (LevelCRC.SCORPION_TEMPLE, LevelCRC.EYES_OF_DOOM),
     # Mouth of Inti has 2 connections with Altar of Huitaca, which causes problems,
     # basically it's very easy to get softlocked by the spider web when entering Altar of Huitaca
     # So for now just don't randomize it. That way runs don't just end out of nowhere
@@ -97,9 +102,8 @@ disabled_exits = (
     # So for now just don't randomize it. That way we won't have to worry about that yet
     (LevelCRC.TWIN_OUTPOSTS, LevelCRC.TWIN_OUTPOSTS_UNDERWATER),
     (LevelCRC.TWIN_OUTPOSTS_UNDERWATER, LevelCRC.TWIN_OUTPOSTS),
-    # The 3 Spirit Fights are currently chosen to not be randomized.
-    # If we at some point DO decide to randomize them they'll need some special code anyway,
-    # because we don't want to fight any given animal spirit more than once in a run
+    # The 3 Spirit Fights are randomized using another method: the 'onetime' logic
+    # This means we should still include these in disabled_exits.
     (LevelCRC.MONKEY_TEMPLE, LevelCRC.MONKEY_SPIRIT),
     (LevelCRC.MONKEY_SPIRIT, LevelCRC.MONKEY_TEMPLE),
     (LevelCRC.SCORPION_TEMPLE, LevelCRC.SCORPION_SPIRIT),
@@ -119,8 +123,8 @@ disabled_exits = (
     (LevelCRC.PICKAXE_RACE, LevelCRC.NATIVE_VILLAGE),
     (LevelCRC.NATIVE_VILLAGE, LevelCRC.KABOOM),
     (LevelCRC.KABOOM, LevelCRC.NATIVE_VILLAGE),
-    # The 2 CUTSCENE Levels are currently chosen to not be randomized.
-    # As of right now both of these cutscenes are hijacked to be skipped entirely
+    # The 2 CUTSCENE Levels are randomized using another method: the 'onetime' logic
+    # This means we should still include these in disabled_exits.
     (LevelCRC.JAGUAR, LevelCRC.PLANE_CUTSCENE),
     (LevelCRC.PLANE_CUTSCENE, LevelCRC.CRASH_SITE),
     (LevelCRC.SPINJA_LAIR, LevelCRC.VIRACOCHA_MONOLITHS_CUTSCENE),
@@ -176,6 +180,29 @@ def remove_disabled_exits():
                 x for x in ALL_POSSIBLE_TRANSITIONS_RANDO if x != trans
             ]
 
+def check_onetime_levels(standard_redirect: Transition):
+    new_redirect: Transition | None = None
+    for onetime in onetime_areas:
+        if onetime_visited[onetime] == False:
+            onetime_reverse = (onetime_insertions[onetime][1], onetime_insertions[onetime][0])
+            if (
+                standard_redirect == onetime_visited[onetime]
+                or standard_redirect == onetime_reverse
+            ):
+                new_redirect = Transition(
+                    TRANSITION_INFOS_DICT[onetime].default_entrance,
+                    onetime,
+                )
+                leave_origin = Transition(
+                    onetime,
+                    TRANSITION_INFOS_DICT[onetime].exits[0].area_id,
+                )
+                transitions_map[leave_origin] = standard_redirect
+                break
+    if new_redirect is None:
+        return standard_redirect
+    else:
+        return new_redirect
 
 def highjack_transition(
     from_: int | None,
@@ -218,6 +245,8 @@ def highjack_transition_rando():
             redirect.from_,
             to=LevelCRC.ST_CLAIRE_NIGHT if state.visited_altar_of_ages else LevelCRC.ST_CLAIRE_DAY,
         )
+
+    redirect = check_onetime_levels(redirect)
 
     print(
         "highjack_transition_rando |",
@@ -355,6 +384,28 @@ def get_random_redirection(original: Transition, all_redirections: Iterable[Tran
     return None
 
 
+def set_onetime_insertions():
+    pairs_used: list[tuple[int, int]] = []
+    for area_id in onetime_areas:
+        onetime_visited[area_id] = False
+        still_duplicate = True
+        while still_duplicate:
+            trans = random.sample(transitions_map.items(), 1)
+            origin = trans[0][0]
+            redirect = trans[0][1]
+            pair: tuple[int, int] = (origin[0], redirect[1])
+            if pair not in pairs_used:
+                still_duplicate = False
+                onetime_insertions[area_id] = (origin, redirect)
+                reverse_pair = (redirect[1], origin[0])
+                pairs_used.append(pair)
+                pairs_used.append(reverse_pair)
+    for fight in spirit_fights:
+        temple = TRANSITION_INFOS_DICT[fight].default_entrance
+        non_random_exit = TRANSITION_INFOS_DICT[temple].exits[0].area_id
+        transitions_map[(temple, fight)] = transitions_map[(temple, non_random_exit)]
+
+
 def set_transitions_map():  # noqa: PLR0915 # TODO: Break up in smaller functions
     transitions_map.clear()
     initialize_connections_left()
@@ -443,3 +494,4 @@ def set_transitions_map():  # noqa: PLR0915 # TODO: Break up in smaller function
             if redirect is not None:
                 transitions_map[original] = redirect
                 _possible_redirections_bucket.remove(redirect)
+    set_onetime_insertions()

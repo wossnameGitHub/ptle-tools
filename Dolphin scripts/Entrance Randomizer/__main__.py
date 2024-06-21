@@ -22,6 +22,8 @@ from lib.constants import __version__
 from lib.entrance_rando import (
     highjack_transition,
     highjack_transition_rando,
+    onetime_insertions,
+    onetime_visited,
     set_transitions_map,
     starting_area,
     transitions_map,
@@ -48,8 +50,8 @@ except KeyError:
     starting_area_name = hex(starting_area).upper() + " (unknown level)"
 
 # Dump spoiler logs and graph
-dump_spoiler_logs(starting_area_name, transitions_map, seed_string)
-create_graphml(transitions_map, seed_string, starting_area)
+dump_spoiler_logs(starting_area_name, transitions_map, onetime_insertions, seed_string)
+create_graphml(transitions_map, onetime_insertions, seed_string, starting_area)
 
 
 async def main_loop():
@@ -102,6 +104,11 @@ async def main_loop():
         LevelCRC.VIRACOCHA_MONOLITHS_CUTSCENE,
         LevelCRC.VIRACOCHA_MONOLITHS,
     )
+
+    if state.current_area_new in onetime_visited.keys():
+        if onetime_visited[state.current_area_new] == False:
+            onetime_visited[state.current_area_new] = True
+            print("visited ", state.current_area_new)
 
     # Standardize St. Claire's Excavation Camp
     highjack_transition(None, LevelCRC.ST_CLAIRE_NIGHT, LevelCRC.ST_CLAIRE_DAY)

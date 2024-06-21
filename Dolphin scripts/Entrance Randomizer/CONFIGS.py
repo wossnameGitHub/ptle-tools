@@ -29,6 +29,15 @@ If False, no such guarantees are given.
 default = True
 """
 
+ONETIME_LEVELS_RANDO: bool = True
+"""
+If True, the Spirit Fights and certain Cutscenes will be randomized throughout the map,
+and after visiting them once you never see them again.
+If False, the Spirit Fights are exactly where they are normally, and the cutscenes are skipped.
+
+default = False
+"""
+
 SKIP_JAGUAR: bool = True
 """
 If True, you will completely skip both Jaguar fights.
