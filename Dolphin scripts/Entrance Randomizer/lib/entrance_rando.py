@@ -170,6 +170,7 @@ __connections_left: dict[int, int] = {}
 """Used in randomization process to track per Area how many exits aren't connected yet."""
 
 loose_ends: list[Transition] = []
+sacred_exits: list[Transition] = []
 __current_hub = 0
 
 
@@ -234,6 +235,10 @@ def create_connection(
     global link_list
     global total_con_left
     global loose_ends
+    global sacred_exits
+
+    if len(loose_ends) > 0 and (origin.from_ == __current_hub or redirect.to == __current_hub):
+        sacred_exits.append(origin)
 
     link_list.append((origin, redirect))
     _possible_origins_bucket.remove(origin)
@@ -343,20 +348,20 @@ def connect_to_existing(
 
     if len(loose_ends) > 0:
         closed_door_level = random.choice([trans.to for trans in loose_ends])
-        levels_chosen.extend([closed_door_level, __current_hub])
+        levels_chosen.extend([__current_hub, closed_door_level])  # order is important!
         levels_available.remove(closed_door_level)
         levels_available.remove(__current_hub)
         current_con_left -= 2
         minimum_chosen = 0
         if __connections_left[__current_hub] == 1:
-            __current_hub = level_list[index].area_id
             current_con_left -= 1
 
     amount_chosen = random.randint(minimum_chosen, min(current_con_left, len(levels_available)))
     levels_chosen.extend(random.sample(levels_available, amount_chosen))
     for level_chosen in levels_chosen:
         connect_two_areas(level_chosen, level_list[index].area_id)
-
+    if __connections_left[__current_hub] == 0:
+        __current_hub = level_list[index].area_id
 
 def insert_area_inbetween(
     old_origin: Transition,
@@ -407,6 +412,11 @@ def check_part_of_loop(
             if link[1] == closed_door_exit:
                 unchecked_links.remove(link)
                 break
+    for sacred_exit in sacred_exits:
+        for link in unchecked_links:
+            if link[1] == sacred_exit:
+                unchecked_links.remove(link)
+                break
 
     chosen_mirror = calculate_mirror(chosen_link[0], chosen_link[1])
 
@@ -425,10 +435,14 @@ def find_and_break_open_connection(link_list: list[tuple[Transition, Transition]
     direc = random.choice([-1, 1])
     index = random.randrange(len(link_list))
     valid_link = False
+    CRASH_COUNTER = 0
     while not valid_link:
         valid_link = check_part_of_loop(link_list[index], link_list)
         if not valid_link:
             index = increment_index(index, len(link_list), direc)
+            CRASH_COUNTER += 1
+            if CRASH_COUNTER > 100:
+                raise Exception("Infinite loop!")
     delete_connection(link_list[index][0], link_list[index][1])
 
 
@@ -526,7 +540,14 @@ def set_transitions_map():  # noqa: PLR0915 # TODO: Break up in smaller function
 
             # Option 3: break open a connection that's part of a loop, then restart iteration
             else:
-                find_and_break_open_connection(level_list, index, link_list)
+                try:
+                    find_and_break_open_connection(link_list)
+                except:
+                    print('ATTENTION ATTENTION: THE RANDOMIZER CRASHED!!!')
+                    print('levels left:')
+                    for level in range(index, len(level_list)):
+                        print(level_list[level].name)
+                    break
                 continue
 
             index += 1
