@@ -46,6 +46,24 @@ def create_vertices(
             ),
         ),
     )
+
+    # This technically isn't 100% accurate, but it makes the graph more readable
+    spirit_fights = (
+        LevelCRC.MONKEY_SPIRIT,
+        LevelCRC.SCORPION_SPIRIT,
+        LevelCRC.PENGUIN_SPIRIT,
+    )
+    if starting_area in spirit_fights:
+        starting_area = TRANSITION_INFOS_DICT[starting_area].exits[0].area_id
+
+    # This should be removed once Beta Volcano fully becomes part of the randomization process
+    if starting_area == LevelCRC.BETA_VOLCANO and starting_area not in area_ids_randomized:
+        holding_list = []
+        for area_id in area_ids_randomized:
+            holding_list.append(area_id)
+        holding_list.append(LevelCRC.BETA_VOLCANO)
+        area_ids_randomized = holding_list
+
     counter_x = 0
     counter_y = 0
     for area_id in area_ids_randomized:
@@ -92,32 +110,86 @@ def create_vertices(
     return output_text
 
 
-def create_edges(transitions_map: Mapping[tuple[int, int], tuple[int, int]]):
-    connections = [(original[0], redirect[1]) for original, redirect in transitions_map.items()]
-    connections_two_way: list[tuple[int, int]] = []
-    connections_one_way: list[tuple[int, int]] = []
+def edge_text(
+    start: int,
+    end: int,
+    counter: int,
+    direct: str,
+    color: str | None,
+    dashed: bool,
+):
+    output = (
+        f'<edge source="{TRANSITION_INFOS_DICT[start].area_id}" '
+        + f'target="{TRANSITION_INFOS_DICT[end].area_id}" isDirect="{direct}" '
+        + f'id="{counter}"'
+    )
+    if dashed or color is not None:
+        output += ' ownStyles="{&quot;0&quot;:{'
+        if color is not None:
+            output += f'&quot;strokeStyle&quot;:&quot;{color}&quot;'
+            if dashed:
+                output += ','
+        if dashed:
+            output += '&quot;lineDash&quot;:&quot;2&quot;'
+        output += '}}"'
+    output += '></edge>\n'
+    return output
+
+
+def create_edges(
+    transitions_map: Mapping[tuple[int, int], tuple[int, int]],
+    temp_disabled_exits: list[tuple[int, int]],
+    closed_door_exits: list[tuple[int, int]],
+    starting_area: int,
+):
+    connections = [(original, redirect) for original, redirect in transitions_map.items()]
+    connections_two_way: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    connections_one_way: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    connections_closed_door: list[tuple[tuple[int, int], tuple[int, int]]] = []
     for pairing in connections:
-        if (pairing[1], pairing[0]) not in connections_two_way:
-            if (pairing[1], pairing[0]) in connections:
+        reverse = (
+            (pairing[1][1], pairing[1][0]),
+            (pairing[0][1], pairing[0][0])
+        )
+        if reverse not in connections_two_way and reverse not in connections_closed_door:
+            if pairing[1] in closed_door_exits:
+                connections_closed_door.append(pairing)
+                continue
+            if reverse[1] in closed_door_exits:
+                continue
+            if reverse in connections:
                 connections_two_way.append(pairing)
             else:
                 connections_one_way.append(pairing)
 
+    # This should be removed once Beta Volcano becomes a full part of the randomization process
+    if starting_area == LevelCRC.BETA_VOLCANO:
+        connections_one_way.append((
+            (LevelCRC.BETA_VOLCANO, LevelCRC.JUNGLE_CANYON),
+            (LevelCRC.BETA_VOLCANO, LevelCRC.JUNGLE_CANYON)
+        ))
+        connections_one_way.append((
+            (LevelCRC.BETA_VOLCANO, LevelCRC.PLANE_COCKPIT),
+            (LevelCRC.BETA_VOLCANO, LevelCRC.PLANE_COCKPIT)
+        ))
+
     output_text = ""
     counter = 1  # Can't start at 0 since that's the MAIN_MENU id
     for pairing in connections_two_way:
-        output_text += (
-            f'<edge source="{TRANSITION_INFOS_DICT[pairing[0]].area_id}" '
-            + f'target="{TRANSITION_INFOS_DICT[pairing[1]].area_id}" isDirect="false" '
-            + f'id="{counter}"></edge>\n'
-        )
+        if pairing[1] in temp_disabled_exits:
+            output_text += edge_text(pairing[0][0],pairing[1][1],counter,'false','#000000',False)
+        else:
+            output_text += edge_text(pairing[0][0],pairing[1][1],counter,'false',None,False)
         counter += 1
     for pairing in connections_one_way:
-        output_text += (
-            f'<edge source="{TRANSITION_INFOS_DICT[pairing[0]].area_id}" '
-            + f'target="{TRANSITION_INFOS_DICT[pairing[1]].area_id}" isDirect="true" '
-            + f'id="{counter}"></edge>\n'
-        )
+        # This should be removed once Beta Volcano becomes a full part of the randomization process
+        if pairing[0][0] == LevelCRC.BETA_VOLCANO:
+            output_text += edge_text(pairing[0][0],pairing[1][1],counter,'true','#000000',True)
+        else:
+            output_text += edge_text(pairing[0][0],pairing[1][1],counter,'true',None,True)
+        counter += 1
+    for pairing in connections_closed_door:
+        output_text += edge_text(pairing[1][1],pairing[0][0],counter,'true','#ff0000',False)
         counter += 1
     return output_text
 
@@ -125,10 +197,11 @@ def create_edges(transitions_map: Mapping[tuple[int, int], tuple[int, int]]):
 def create_graphml(
     transitions_map: Mapping[tuple[int, int], tuple[int, int]],
     temp_disabled_exits: Sequence[tuple[int, int]],
+    closed_door_exits: list[tuple[int, int]],
     seed_string: SeedType,
     starting_area: int,
 ):
-    all_transitions: Mapping[tuple[int, int], tuple[int, int]] = transitions_map.copy()
+    all_transitions = transitions_map.copy()
     for item in temp_disabled_exits:
         all_transitions[item] = item
 
@@ -136,8 +209,8 @@ def create_graphml(
         '<?xml version="1.0" encoding="UTF-8"?>'
         + '<graphml><graph id="Graph" uidGraph="1" uidEdge="1">\n'
         + create_vertices(all_transitions, starting_area)
-        + create_edges(all_transitions)
-        + "</graph></graphml>"
+        + create_edges(all_transitions, temp_disabled_exits, closed_door_exits, starting_area)
+        + '</graph></graphml>'
     )
 
     # TODO (Avasam): Get actual user folder based whether Dolphin Emulator is in AppData/Roaming
