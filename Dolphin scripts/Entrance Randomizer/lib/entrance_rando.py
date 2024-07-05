@@ -170,7 +170,7 @@ __connections_left: dict[int, int] = {}
 """Used in randomization process to track per Area how many exits aren't connected yet."""
 
 loose_ends: list[Transition] = []
-sacred_exits: list[Transition] = []
+sacred_pairs: list[tuple[int, int]] = []
 __current_hub = 0
 
 
@@ -235,16 +235,17 @@ def create_connection(
     global link_list
     global total_con_left
     global loose_ends
-    global sacred_exits
+    global sacred_pairs
 
     if len(loose_ends) > 0 and (origin.from_ == __current_hub or redirect.to == __current_hub):
-        sacred_exits.append(origin)
+        sacred_pairs.append((origin.from_, redirect.to))
 
     link_list.append((origin, redirect))
     _possible_origins_bucket.remove(origin)
     _possible_redirections_bucket.remove(redirect)
     if redirect in loose_ends:
         loose_ends.remove(redirect)
+        sacred_pairs.append((origin.from_, redirect.to))
 
     mirror_origin, mirror_redirect = calculate_mirror(origin, redirect)
 
@@ -253,6 +254,7 @@ def create_connection(
     _possible_redirections_bucket.remove(mirror_redirect)
     if mirror_redirect in loose_ends:
         loose_ends.remove(mirror_redirect)
+        sacred_pairs.append((origin.from_, redirect.to))
 
     __connections_left[origin[0]] -= 1
     __connections_left[mirror_origin[0]] -= 1
@@ -360,7 +362,7 @@ def connect_to_existing(
     levels_chosen.extend(random.sample(levels_available, amount_chosen))
     for level_chosen in levels_chosen:
         connect_two_areas(level_chosen, level_list[index].area_id)
-    if __connections_left[__current_hub] == 0:
+    if len(loose_ends) > 0 and __connections_left[__current_hub] == 0:
         __current_hub = level_list[index].area_id
 
 def insert_area_inbetween(
@@ -368,6 +370,16 @@ def insert_area_inbetween(
     old_redirect: Transition,
     new_level: int,
 ):
+    global sacred_pairs
+    pair = tuple([old_origin.from_, old_redirect.to])
+    mirror_pair = tuple([old_redirect.to, old_origin.from_])
+    if pair in sacred_pairs or mirror_pair in sacred_pairs:
+        sacred_pairs = [ x for x in sacred_pairs if x != pair and x != mirror_pair]
+        sacred_pairs.extend([
+            (new_level, old_origin.from_),
+            (new_level, old_redirect.to),
+        ])
+
     delete_connection(old_origin, old_redirect)
 
     new_redirect_entrance = choose_random_exit(new_level, BucketType.REDIRECT, Priority.OPEN)
@@ -412,19 +424,18 @@ def check_part_of_loop(
             if link[1] == closed_door_exit:
                 unchecked_links.remove(link)
                 break
-    for sacred_exit in sacred_exits:
-        for link in unchecked_links:
-            if link[1] == sacred_exit:
-                unchecked_links.remove(link)
-                break
+
+    pair = tuple([chosen_link[0].from_, chosen_link[1].to])
+    mirror_pair = tuple([chosen_link[1].to, chosen_link[0].from_])
+
+    if pair in sacred_pairs or mirror_pair in sacred_pairs:
+        return False
 
     chosen_mirror = calculate_mirror(chosen_link[0], chosen_link[1])
 
-    if chosen_link in unchecked_links and chosen_mirror in unchecked_links:
-        unchecked_links.remove(chosen_link)
-        unchecked_links.remove(chosen_mirror)
-    else:
-        return False
+    unchecked_links.remove(chosen_link)
+    unchecked_links.remove(chosen_mirror)
+
     if can_reach_other_side(chosen_link, unchecked_links):
         return can_reach_other_side(chosen_mirror, unchecked_links)
     else:
@@ -441,8 +452,8 @@ def find_and_break_open_connection(link_list: list[tuple[Transition, Transition]
         if not valid_link:
             index = increment_index(index, len(link_list), direc)
             CRASH_COUNTER += 1
-            if CRASH_COUNTER > 100:
-                raise Exception("Infinite loop!")
+            if CRASH_COUNTER > 1000:
+                raise Exception("NO CONNECTION FOUND")
     delete_connection(link_list[index][0], link_list[index][1])
 
 
@@ -542,12 +553,15 @@ def set_transitions_map():  # noqa: PLR0915 # TODO: Break up in smaller function
             else:
                 try:
                     find_and_break_open_connection(link_list)
-                except:
-                    print('ATTENTION ATTENTION: THE RANDOMIZER CRASHED!!!')
-                    print('levels left:')
-                    for level in range(index, len(level_list)):
-                        print(level_list[level].name)
-                    break
+                except Exception as e:
+                    if str(e) == 'NO CONNECTION FOUND':
+                        print('')
+                        print('ATTENTION ATTENTION: THE RANDOMIZER CRASHED!!!')
+                        print('Please notify a developer!')
+                        print('')
+                        break
+                    else:
+                        raise
                 continue
 
             index += 1
