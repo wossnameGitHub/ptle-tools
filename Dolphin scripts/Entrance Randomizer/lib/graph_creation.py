@@ -5,6 +5,7 @@ from pathlib import Path
 
 from lib.constants import *  # noqa: F403
 from lib.constants import __version__
+from lib.entrance_rando import TRANSITION_INFOS_DICT_RANDO
 from lib.types_ import SeedType
 
 STARTING_AREA_COLOR = "#ff8000"  # Orange
@@ -54,7 +55,7 @@ def create_vertices(
         LevelCRC.PENGUIN_SPIRIT,
     )
     if starting_area in spirit_fights:
-        starting_area = TRANSITION_INFOS_DICT[starting_area].exits[0].area_id
+        starting_area = TRANSITION_INFOS_DICT_RANDO[starting_area].exits[0].area_id
 
     # This should be removed once Beta Volcano fully becomes part of the randomization process
     if starting_area == LevelCRC.BETA_VOLCANO and starting_area not in area_ids_randomized:
@@ -72,7 +73,7 @@ def create_vertices(
         # The same logic applies to the Spirit Fights:
         # these will never appear on the map, therefore we remove the (Harry) suffix.
         area_name = (
-            TRANSITION_INFOS_DICT
+            TRANSITION_INFOS_DICT_RANDO
             [area_id]
             .name
             .replace(" (Day)", "")
@@ -119,8 +120,8 @@ def edge_text(
     dashed: bool,
 ):
     output = (
-        f'<edge source="{TRANSITION_INFOS_DICT[start].area_id}" '
-        + f'target="{TRANSITION_INFOS_DICT[end].area_id}" isDirect="{direct}" '
+        f'<edge source="{TRANSITION_INFOS_DICT_RANDO[start].area_id}" '
+        + f'target="{TRANSITION_INFOS_DICT_RANDO[end].area_id}" isDirect="{direct}" '
         + f'id="{counter}"'
     )
     if dashed or color is not None:

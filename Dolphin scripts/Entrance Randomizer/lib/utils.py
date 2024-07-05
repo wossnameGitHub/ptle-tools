@@ -7,7 +7,7 @@ from typing import ClassVar
 from dolphin import gui  # pyright: ignore[reportMissingModuleSource]
 from lib.constants import *  # noqa: F403
 from lib.constants import __version__
-from lib.entrance_rando import TRANSITION_INFOS_DICT, Transition, temples, transitions_map
+from lib.entrance_rando import TRANSITION_INFOS_DICT_RANDO, Outpost, Transition, temples, transitions_map
 from lib.types_ import SeedType
 
 DRAW_TEXT_STEP = 24
@@ -85,6 +85,7 @@ def highjack_transition(
             f"Redirecting to: {hex(redirect)}",
         )
         memory.write_u32(ADDRESSES.current_area, redirect)
+        state.current_area_new = redirect # new line of code!
         return True
     return False
 
@@ -93,6 +94,26 @@ def highjack_transition_rando():
     # Early return, faster check. Detect the start of a transition
     if state.current_area_old == state.current_area_new:
         return False
+
+    current_previous_area = memory.read_u32(follow_pointer_path(ADDRESSES.prev_area))
+
+    if state.current_area_new == LevelCRC.TWIN_OUTPOSTS_UNDERWATER:
+        if current_previous_area == 0X9D1A6D4A:
+            state.current_area_old = Outpost.JUNGLE
+        else: # elif current_previous_area == 0X7C65128A:
+            state.current_area_old = Outpost.BURNING
+    elif state.current_area_new == LevelCRC.TWIN_OUTPOSTS:
+        if current_previous_area == 0X00D15464 or current_previous_area == 0XE1AE2BA4:
+            state.current_area_old = LevelCRC.TWIN_OUTPOSTS_UNDERWATER # I'm not sure this line does anything...
+        if current_previous_area == 0X00D15464 or current_previous_area == LevelCRC.FLOODED_COURTYARD:
+            state.current_area_new = Outpost.JUNGLE
+        else: # elif ....:
+            state.current_area_new = Outpost.BURNING
+    elif state.current_area_old == LevelCRC.TWIN_OUTPOSTS:
+        if state.current_area_new == LevelCRC.FLOODED_COURTYARD:
+            state.current_area_old = Outpost.JUNGLE
+        else: # elif current_area_new == LevelCRC.TURTLE_MONUMENT:
+            state.current_area_old = Outpost.BURNING
 
     redirect = transitions_map.get((state.current_area_old, state.current_area_new))
     if not redirect:
@@ -110,6 +131,21 @@ def highjack_transition_rando():
         spirit = TRANSITION_INFOS_DICT[redirect.to].exits[1].area_id
         if not state.visited_spirits[spirit]:
             redirect = Transition(from_=redirect.to, to=spirit)
+
+    if redirect.to == LevelCRC.TWIN_OUTPOSTS_UNDERWATER: # how to properly reach underwater
+        if redirect.from_ == Outpost.JUNGLE:
+            redirect = Transition(from_=0X9D1A6D4A, to=redirect.to)
+        else:
+            redirect = Transition(from_=0X7C65128A, to=redirect.to)
+    elif redirect.to == Outpost.JUNGLE or redirect.to == Outpost.BURNING: # how to properly reach Twin Outposts
+        if redirect.from_ == LevelCRC.TWIN_OUTPOSTS_UNDERWATER:
+            if redirect.to == Outpost.JUNGLE:
+                redirect = Transition(from_=0X00D15464, to=LevelCRC.TWIN_OUTPOSTS)
+            else:
+                redirect = Transition(from_=0XE1AE2BA4, to=LevelCRC.TWIN_OUTPOSTS)
+        redirect = Transition(from_=redirect.from_, to=LevelCRC.TWIN_OUTPOSTS)
+    elif redirect.from_ == Outpost.JUNGLE or redirect.from_ == Outpost.BURNING: # how to properly reach Flooded / Turtle Monument
+        redirect = Transition(from_=LevelCRC.TWIN_OUTPOSTS, to=redirect.to)
 
     print(
         "highjack_transition_rando |",
@@ -230,10 +266,10 @@ def dump_spoiler_logs(
 ):
     spoiler_logs = f"Starting area: {starting_area_name}\n"
     red_string_list = [
-        f"{TRANSITION_INFOS_DICT[original[0]].name} "
-        + f"({TRANSITION_INFOS_DICT[original[1]].name} exit) "
-        + f"will redirect to: {TRANSITION_INFOS_DICT[redirect[1]].name} "
-        + f"({TRANSITION_INFOS_DICT[redirect[0]].name} entrance)\n"
+        f"{TRANSITION_INFOS_DICT_RANDO[original[0]].name} "
+        + f"({TRANSITION_INFOS_DICT_RANDO[original[1]].name} exit) "
+        + f"will redirect to: {TRANSITION_INFOS_DICT_RANDO[redirect[1]].name} "
+        + f"({TRANSITION_INFOS_DICT_RANDO[redirect[0]].name} entrance)\n"
         for original, redirect in transitions_map.items()
     ]
     red_string_list.sort()

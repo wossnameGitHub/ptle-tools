@@ -8,7 +8,7 @@ from typing import NamedTuple
 
 import CONFIGS
 from lib.constants import *  # noqa: F403
-from lib.transition_infos import Area
+from lib.transition_infos import Area, Exit
 
 
 class Transition(NamedTuple):
@@ -30,6 +30,10 @@ class Priority(IntEnum):
     CLOSED = 1
     OPEN = 2
 
+class Outpost(IntEnum):
+    JUNGLE = 1000
+    BURNING = 2000
+
 
 temples = (
     LevelCRC.MONKEY_TEMPLE,
@@ -50,7 +54,7 @@ one_way_exits = (
 
 closed_door_exits = (
     # These passages are blocked by literal closed doors
-    Transition(LevelCRC.TWIN_OUTPOSTS, LevelCRC.FLOODED_COURTYARD),
+    Transition(Outpost.JUNGLE, LevelCRC.FLOODED_COURTYARD),
     Transition(LevelCRC.SCORPION_TEMPLE, LevelCRC.EYES_OF_DOOM),
     Transition(LevelCRC.MOUNTAIN_OVERLOOK, LevelCRC.EYES_OF_DOOM),
     Transition(LevelCRC.COPACANTI_LAKE, LevelCRC.VALLEY_OF_SPIRITS),
@@ -85,8 +89,6 @@ _possible_starting_areas = [
         LevelCRC.RAFT_BOWLING,
         LevelCRC.PICKAXE_RACE,
         LevelCRC.KABOOM,
-        # See `disabled_exits` below. Currently this is equivalent to spawning in Twin Outposts.
-        LevelCRC.TWIN_OUTPOSTS_UNDERWATER,
         # Cutscenes
         LevelCRC.PLANE_CUTSCENE,
         LevelCRC.VIRACOCHA_MONOLITHS_CUTSCENE,
@@ -99,12 +101,6 @@ temp_disabled_exits = [
     # So for now just don't randomize it. That way runs don't just end out of nowhere
     (LevelCRC.ALTAR_OF_HUITACA, LevelCRC.MOUTH_OF_INTI),
     (LevelCRC.MOUTH_OF_INTI, LevelCRC.ALTAR_OF_HUITACA),
-    # Twin Outposts has a very unusual connection with Twin Outposts Underwater,
-    # If randomized normally this may cause the game to be completely unbeatable
-    # because you might never be able to reach Burning Outposts
-    # So for now just don't randomize it. That way we won't have to worry about that yet
-    (LevelCRC.TWIN_OUTPOSTS, LevelCRC.TWIN_OUTPOSTS_UNDERWATER),
-    (LevelCRC.TWIN_OUTPOSTS_UNDERWATER, LevelCRC.TWIN_OUTPOSTS),
 ]
 
 disabled_exits = (
@@ -187,34 +183,97 @@ def increment_index(
     return new_index
 
 
-def initialize_connections_left():
-    for area in TRANSITION_INFOS_DICT.values():
-        __connections_left[area.area_id] = len(area.exits)
+def add_exit(area: Area, ex_id: int):
+    ex = Exit(
+        ex_id,
+        TRANSITION_INFOS_DICT_RANDO[ex_id].name,
+        None,
+    )
+    TRANSITION_INFOS_DICT_RANDO[area.area_id] = Area(
+        area.area_id,
+        area.name,
+        area.default_entrance,
+        tuple([x for x in TRANSITION_INFOS_DICT_RANDO[area.area_id].exits] + [ex]),
+    )
+    global ALL_POSSIBLE_TRANSITIONS_RANDO
+    ALL_POSSIBLE_TRANSITIONS_RANDO.append(tuple([area.area_id, ex_id]))
+
+
+def delete_exit(area: Area, ex: Exit):
+    TRANSITION_INFOS_DICT_RANDO[area.area_id] = Area(
+        area.area_id,
+        area.name,
+        area.default_entrance,
+        tuple([x for x in TRANSITION_INFOS_DICT_RANDO[area.area_id].exits if x != ex]),
+    )
+    global ALL_POSSIBLE_TRANSITIONS_RANDO
+    ALL_POSSIBLE_TRANSITIONS_RANDO = [
+        x for x in ALL_POSSIBLE_TRANSITIONS_RANDO
+        if x != tuple([area.area_id, ex.area_id])
+    ]
 
 
 def remove_disabled_exits():
-    # remove exits from TRANSITION_INFOS_DICT_RANDO
     for area in TRANSITION_INFOS_DICT.values():
         for ex in area.exits:
             current = (area.area_id, ex.area_id)
             if current in one_way_exits or current in disabled_exits:
-                TRANSITION_INFOS_DICT_RANDO[area.area_id] = Area(
-                    area.area_id,
-                    area.name,
-                    area.default_entrance,
-                    tuple([
-                        x for x in TRANSITION_INFOS_DICT_RANDO[area.area_id].exits if x != ex
-                    ]),
-                )
-                __connections_left[area.area_id] -= 1
+                delete_exit(area, ex)
 
-    # remove exits from ALL_POSSIBLE_TRANSITIONS_RANDO
-    global ALL_POSSIBLE_TRANSITIONS_RANDO
-    for trans in ALL_POSSIBLE_TRANSITIONS:
-        if trans in one_way_exits or trans in disabled_exits:
-            ALL_POSSIBLE_TRANSITIONS_RANDO = [  # pyright: ignore[reportConstantRedefinition]
-                x for x in ALL_POSSIBLE_TRANSITIONS_RANDO if x != trans
-            ]
+
+def twin_outposts_underwater_prep():
+    # create new area: Jungle Outpost (with 1 exit to Flooded Courtyard and 1 exit to Twin Outposts Underwater)
+    TRANSITION_INFOS_DICT_RANDO[Outpost.JUNGLE] = Area(
+        Outpost.JUNGLE,
+        "Jungle Outpost",
+        LevelCRC.FLOODED_COURTYARD,
+        tuple(),
+    )
+    area = TRANSITION_INFOS_DICT_RANDO[Outpost.JUNGLE]
+    add_exit(area, LevelCRC.FLOODED_COURTYARD)
+    add_exit(area, LevelCRC.TWIN_OUTPOSTS_UNDERWATER)
+    # create new area: Burning Outpost (with 1 exit to Turtle Monument and 1 exit to Twin Outposts Underwater)
+    TRANSITION_INFOS_DICT_RANDO[Outpost.BURNING] = Area(
+        Outpost.BURNING,
+        "Burning Outpost",
+        LevelCRC.TURTLE_MONUMENT,
+        tuple(),
+    )
+    area = TRANSITION_INFOS_DICT_RANDO[Outpost.BURNING]
+    add_exit(area, LevelCRC.TURTLE_MONUMENT)
+    add_exit(area, LevelCRC.TWIN_OUTPOSTS_UNDERWATER)
+    # in area Twin outposts remove all 3 exits (is effectively the same as removing the level entirely)
+    area = TRANSITION_INFOS_DICT_RANDO[LevelCRC.TWIN_OUTPOSTS]
+    for i in range(3):
+        delete_exit(
+            TRANSITION_INFOS_DICT_RANDO[LevelCRC.TWIN_OUTPOSTS],
+            TRANSITION_INFOS_DICT_RANDO[LevelCRC.TWIN_OUTPOSTS].exits[0],
+        )
+    # in area flooded courtyard replace exit Twin Outposts with exit Outpost.Jungle
+    area = TRANSITION_INFOS_DICT_RANDO[LevelCRC.FLOODED_COURTYARD]
+    for ex in area.exits:
+        if ex.area_id == LevelCRC.TWIN_OUTPOSTS:
+            delete_exit(area, ex)
+            break
+    add_exit(area, Outpost.JUNGLE)
+    # in area turtle monument replace exit Twin Outposts with exit Outpost.Burning
+    area = TRANSITION_INFOS_DICT_RANDO[LevelCRC.TURTLE_MONUMENT]
+    for ex in area.exits:
+        if ex.area_id == LevelCRC.TWIN_OUTPOSTS:
+            delete_exit(area, ex)
+            break
+    add_exit(area, Outpost.BURNING)
+    # in area Twin outposts underwater remove the 1 exit it has,
+    # and replace them with 1 exit to Outpost.Jungle and 1 to Outpost.Burning
+    area = TRANSITION_INFOS_DICT_RANDO[LevelCRC.TWIN_OUTPOSTS_UNDERWATER]
+    delete_exit(area, area.exits[0])
+    add_exit(area, Outpost.JUNGLE)
+    add_exit(area, Outpost.BURNING)
+
+
+def initialize_connections_left():
+    for area in TRANSITION_INFOS_DICT_RANDO.values():
+        __connections_left[area.area_id] = len(area.exits)
 
 
 def calculate_mirror(
@@ -469,8 +528,9 @@ def get_random_one_way_redirection(original: Transition):
 
 def set_transitions_map():  # noqa: PLR0915 # TODO: Break up in smaller functions
     transitions_map.clear()
-    initialize_connections_left()
     remove_disabled_exits()
+    twin_outposts_underwater_prep()
+    initialize_connections_left()
 
     if not CONFIGS.SKIP_JAGUAR:
         starting_default = TRANSITION_INFOS_DICT_RANDO[starting_area].default_entrance
