@@ -103,14 +103,11 @@ async def main_loop():
             )
 
     # Standardize the Altar of Ages exit to remove the Altar -> BBCamp transition
-    if highjack_transition(
+    highjack_transition(
             LevelCRC.ALTAR_OF_AGES,
             LevelCRC.BITTENBINDERS_CAMP,
             LevelCRC.MYSTERIOUS_TEMPLE,
-    ):
-        # Even if the cutscene isn't actually watched.
-        # Just leaving the Altar is good enough for the rando.
-        state.visited_altar_of_ages = True
+    )
 
     # Standardize the Viracocha Monoliths cutscene
     highjack_transition(
@@ -118,9 +115,6 @@ async def main_loop():
         LevelCRC.VIRACOCHA_MONOLITHS_CUTSCENE,
         LevelCRC.VIRACOCHA_MONOLITHS,
     )
-
-    # Standardize St. Claire's Excavation Camp
-    highjack_transition(None, LevelCRC.ST_CLAIRE_NIGHT, LevelCRC.ST_CLAIRE_DAY)
 
     # TODO: Skip swim levels (3)
 

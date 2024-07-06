@@ -97,8 +97,8 @@ _possible_starting_areas = [
 
 temp_disabled_exits = [
     # Mouth of Inti has 2 connections with Altar of Huitaca, which causes problems,
-    # basically it's very easy to get softlocked by the spider web when entering Altar of Huitaca
-    # So for now just don't randomize it. That way runs don't just end out of nowhere
+    # basically it's very easy to get softlocked by the spider web when entering Altar of Huitaca.
+    # So for now just don't randomize it. That way runs don't just end out of nowhere.
     (LevelCRC.ALTAR_OF_HUITACA, LevelCRC.MOUTH_OF_INTI),
     (LevelCRC.MOUTH_OF_INTI, LevelCRC.ALTAR_OF_HUITACA),
 ]
@@ -115,8 +115,8 @@ disabled_exits = (
     (LevelCRC.PENGUIN_TEMPLE, LevelCRC.PENGUIN_SPIRIT),
     (LevelCRC.PENGUIN_SPIRIT, LevelCRC.PENGUIN_TEMPLE),
     # The 5 Native Games are currently chosen to not be randomized.
-    # If we at some point decide to randomize them anyway we'll have to do some rigorous testing
-    # Because it's very much possible this will cause some bugs
+    # If we at some point decide to randomize them anyway we'll have to do some rigorous testing,
+    # because it's very much possible this will cause some bugs.
     (LevelCRC.NATIVE_VILLAGE, LevelCRC.WHACK_A_TUCO),
     (LevelCRC.WHACK_A_TUCO, LevelCRC.NATIVE_VILLAGE),
     (LevelCRC.NATIVE_VILLAGE, LevelCRC.TUCO_SHOOT),
@@ -128,19 +128,18 @@ disabled_exits = (
     (LevelCRC.NATIVE_VILLAGE, LevelCRC.KABOOM),
     (LevelCRC.KABOOM, LevelCRC.NATIVE_VILLAGE),
     # The 2 CUTSCENE Levels are currently chosen to not be randomized.
-    # As of right now both of these cutscenes are hijacked to be skipped entirely
+    # As of right now both of these cutscenes are hijacked to be skipped entirely.
     (LevelCRC.JAGUAR, LevelCRC.PLANE_CUTSCENE),
     (LevelCRC.PLANE_CUTSCENE, LevelCRC.CRASH_SITE),
     (LevelCRC.SPINJA_LAIR, LevelCRC.VIRACOCHA_MONOLITHS_CUTSCENE),
     (LevelCRC.VIRACOCHA_MONOLITHS_CUTSCENE, LevelCRC.VIRACOCHA_MONOLITHS),
-    # Specific one-time, one-way warps are not randomized.
-    # These 3 are handled elsewhere in the randomizer
-    # Currently there are no plans to randomize these transitions.
+    # This specific one-time, one-way warp is not randomized.
+    # Instead this transition is manually hijacked to send you to Mysterious Temple instead.
     (LevelCRC.ALTAR_OF_AGES, LevelCRC.BITTENBINDERS_CAMP),
+    # The Endgame transitions are not randomized.
+    # Currently there are no plans to randomize these transitions.
     (LevelCRC.ST_CLAIRE_DAY, LevelCRC.ST_CLAIRE_NIGHT),
     (LevelCRC.ST_CLAIRE_NIGHT, LevelCRC.ST_CLAIRE_DAY),
-    # The Endgame El Dorado transitions are not randomized.
-    # Currently there are no plans to randomize these transitions.
     (LevelCRC.GATES_OF_EL_DORADO, LevelCRC.JAGUAR),
     (LevelCRC.JAGUAR, LevelCRC.PUSCA),
     (LevelCRC.PUSCA, LevelCRC.GATES_OF_EL_DORADO),

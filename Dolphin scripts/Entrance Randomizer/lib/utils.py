@@ -25,7 +25,6 @@ class State:
     """Area ID of the previous frame"""
     current_area_new = 0
     """Area ID of the current frame"""
-    visited_altar_of_ages = False
     visited_spirits: ClassVar[dict[int, bool]] = {
         LevelCRC.MONKEY_SPIRIT: False,
         LevelCRC.SCORPION_SPIRIT: False,
@@ -118,13 +117,6 @@ def highjack_transition_rando():
     redirect = transitions_map.get((state.current_area_old, state.current_area_new))
     if not redirect:
         return False
-
-    # Apply Altar of Ages logic to St. Claire's Excavation Camp
-    if redirect.to in {LevelCRC.ST_CLAIRE_DAY, LevelCRC.ST_CLAIRE_NIGHT}:
-        redirect = Transition(
-            redirect.from_,
-            to=LevelCRC.ST_CLAIRE_NIGHT if state.visited_altar_of_ages else LevelCRC.ST_CLAIRE_DAY,
-        )
 
     # Check if you're visiting a Temple for the first time, if so go directly to Spirit Fight
     if redirect.to in temples:
