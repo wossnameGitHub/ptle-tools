@@ -116,8 +116,6 @@ async def main_loop():
         LevelCRC.VIRACOCHA_MONOLITHS,
     )
 
-    # TODO: Skip swim levels (3)
-
     highjack_transition_rando()
 
     prevent_item_softlock()
